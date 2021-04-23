@@ -96,7 +96,7 @@
           <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
             <state split_layout="SPLIT">
               <first_editor relative-caret-position="377">
-                <caret line="11" column="24" selection-start-line="11" selection-start-column="24" selection-end-line="11" selection-end-column="24" />
+                <caret line="11" column="44" selection-start-line="11" selection-start-column="44" selection-end-line="11" selection-end-column="44" />
               </first_editor>
               <second_editor />
             </state>
@@ -104,11 +104,11 @@
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/已阅代码清单_按名称排序.md">
+        <entry file="file://$PROJECT_DIR$/已阅代码清单_模块划分以及名称排序.md">
           <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
             <state split_layout="SPLIT">
               <first_editor relative-caret-position="58">
-                <caret line="2" column="7" lean-forward="true" selection-start-line="2" selection-start-column="7" selection-end-line="2" selection-end-column="7" />
+                <caret line="2" column="7" selection-start-line="2" selection-start-column="7" selection-end-line="2" selection-end-column="7" />
               </first_editor>
               <second_editor />
             </state>
@@ -215,7 +215,7 @@
   <component name="PropertiesComponent">
     <property name="WebServerToolWindowFactoryState" value="false" />
     <property name="aspect.path.notification.shown" value="true" />
-    <property name="com.android.tools.idea.instantapp.provision.ProvisionBeforeRunTaskProvider.myTimeStamp" value="1619152860931" />
+    <property name="com.android.tools.idea.instantapp.provision.ProvisionBeforeRunTaskProvider.myTimeStamp" value="1619152919418" />
     <property name="last_opened_file_path" value="$USER_HOME$/Desktop/实验/jdk1.8-SRC" />
     <property name="project.structure.last.edited" value="SDKs" />
     <property name="project.structure.proportion" value="0.15" />
@@ -303,19 +303,19 @@
       <workItem from="1618994770979" duration="3488000" />
       <workItem from="1618999328524" duration="17873000" />
       <workItem from="1619100698597" duration="4040000" />
-      <workItem from="1619104789738" duration="5115000" />
+      <workItem from="1619104789738" duration="5198000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="30516000" />
+    <option name="totallyTimeSpent" value="30599000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="-8" y="-8" width="1936" height="1056" extended-state="6" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.7836257" visible="true" weight="0.2607296" />
-      <window_info id="Structure" order="1" sideWeight="0.21637426" side_tool="true" visible="true" weight="0.2607296" />
+      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.78389" visible="true" weight="0.2607296" />
+      <window_info id="Structure" order="1" sideWeight="0.21611002" side_tool="true" visible="true" weight="0.2607296" />
       <window_info id="Designer" order="2" />
       <window_info id="Image Layers" order="3" />
       <window_info id="UI Designer" order="4" />
@@ -331,7 +331,7 @@
       <window_info anchor="bottom" id="Version Control" order="7" weight="0.5206243" />
       <window_info anchor="bottom" id="Database Changes" order="8" show_stripe_button="false" />
       <window_info anchor="bottom" id="Statistic" order="9" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="10" sideWeight="0.49946353" visible="true" weight="0.42873052" />
+      <window_info active="true" anchor="bottom" id="Terminal" order="10" sideWeight="0.49946353" visible="true" weight="0.43318486" />
       <window_info anchor="bottom" id="Event Log" order="11" sideWeight="0.5005365" side_tool="true" weight="0.21714923" />
       <window_info anchor="bottom" id="Messages" order="12" weight="0.48049054" />
       <window_info anchor="right" id="Translation Assistant" weight="0.3299356" />
@@ -796,11 +796,11 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/已阅代码清单_按名称排序.md">
+    <entry file="file://$PROJECT_DIR$/已阅代码清单_模块划分以及名称排序.md">
       <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
         <state split_layout="SPLIT">
           <first_editor relative-caret-position="58">
-            <caret line="2" column="7" lean-forward="true" selection-start-line="2" selection-start-column="7" selection-end-line="2" selection-end-column="7" />
+            <caret line="2" column="7" selection-start-line="2" selection-start-column="7" selection-end-line="2" selection-end-column="7" />
           </first_editor>
           <second_editor />
         </state>
@@ -810,7 +810,7 @@
       <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
         <state split_layout="SPLIT">
           <first_editor relative-caret-position="377">
-            <caret line="11" column="24" selection-start-line="11" selection-start-column="24" selection-end-line="11" selection-end-column="24" />
+            <caret line="11" column="44" selection-start-line="11" selection-start-column="44" selection-end-line="11" selection-end-column="44" />
           </first_editor>
           <second_editor />
         </state>
