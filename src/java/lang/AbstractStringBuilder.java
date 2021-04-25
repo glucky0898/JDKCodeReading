@@ -392,6 +392,7 @@ abstract class AbstractStringBuilder implements Appendable, CharSequence {
     // 向ASB末尾添加一个int值的字符串序列
     public AbstractStringBuilder append(int i) {
         int count = this.count;
+        //统计存储的char总数量
         int spaceNeeded = count + Integer.stringSize(i);
         ensureCapacityInternal(spaceNeeded);
         if(isLatin1()) {

@@ -1461,6 +1461,7 @@ public final class Integer extends Number implements Comparable<Integer> {
      * integer.
      */
     // 将整数i中包含的符号转为byte存入buf
+    //index为byte总数量
     static int getChars(int i, int index, byte[] buf) {
         int q, r;
         int charPos = index;
