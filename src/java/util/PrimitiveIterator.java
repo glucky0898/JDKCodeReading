@@ -159,7 +159,6 @@ public interface PrimitiveIterator<T, T_CONS> extends Iterator<T> {
     
             forEachRemaining((IntConsumer) action::accept);
         }
-        
     }
     
     /**

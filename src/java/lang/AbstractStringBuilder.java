@@ -544,7 +544,7 @@ abstract class AbstractStringBuilder implements Appendable, CharSequence {
     }
     
     // 添加一个字符串："null"
-    private AbstractStringBuilder appendNull() {
+    private AbstractStringBuilder  appendNull() {
         ensureCapacityInternal(count + 4);
         int count = this.count;
         byte[] val = this.value;

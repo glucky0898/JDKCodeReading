@@ -2496,7 +2496,7 @@ public final class String implements Serializable, Comparable<String>, CharSeque
     /**
      * Returns a formatted string using the specified locale, format string, and arguments.
      *
-     * @param l      The {@linkplain Locale locale} to apply during formatting.
+     * @param locale      The {@linkplain Locale locale} to apply during formatting.
      *               If {@code l} is {@code null} then no localization is applied.
      * @param format A <a href="../util/Formatter.html#syntax">format string</a>
      * @param args   Arguments referenced by the format specifiers in the format string.
