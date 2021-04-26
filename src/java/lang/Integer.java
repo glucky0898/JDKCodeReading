@@ -1032,11 +1032,12 @@ public final class Integer extends Number implements Comparable<Integer> {
     // 按10进制返回i的值
     @HotSpotIntrinsicCandidate
     public static String toString(int i) {
+        //统计数字i被多少个字符表示
         // 统计整数i中包含的符号数量（包括负号），即计算整数i转为字符串后的长度
         int size = stringSize(i);
-        
         if(COMPACT_STRINGS) {
             byte[] buf = new byte[size];
+            //将数字i中每个字符转成byte，获取i对应的字节数组buf
             getChars(i, size, buf);
             return new String(buf, LATIN1);
         } else {
@@ -1470,7 +1471,7 @@ public final class Integer extends Number implements Comparable<Integer> {
         if(!negative) {
             i = -i;
         }
-        
+        //当小于-100时，说明至少由三个符号构成，则每两位遍历一次
         // Generate two digits per iteration
         while(i<=-100) {
             q = i / 100;
@@ -1479,7 +1480,7 @@ public final class Integer extends Number implements Comparable<Integer> {
             buf[--charPos] = DigitOnes[r];
             buf[--charPos] = DigitTens[r];
         }
-        
+        //经过while判断后，i最多包含2个字符
         // We know there are at most two digits left at this point.
         q = i / 10;
         r = (q * 10) - i;

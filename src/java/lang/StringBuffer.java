@@ -407,6 +407,8 @@ public final class StringBuffer extends AbstractStringBuilder implements Seriali
      * @since 1.5
      */
     // 向StringBuffer的dstOffset索引处插入一个子序列s
+    //该方法虽然未使用synchronized修饰，但依然同步，因为该方法底层调用了public synchronized StringBuffer insert(int offset, String str)
+    //同理其他未使用synchronized修饰的同步方法
     @Override
     public StringBuffer insert(int dstOffset, CharSequence s) {
         // Note, synchronization achieved via invocations of other StringBuffer methods
