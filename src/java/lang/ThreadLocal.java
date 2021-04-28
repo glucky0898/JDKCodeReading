@@ -220,7 +220,7 @@ public class ThreadLocal<T> {
         // 返回当前线程t持有的map
         ThreadLocalMap map = getMap(t);
         
-        // 如果map不为null，返回其键值对中保存的calue
+        // 如果map不为null，返回其键值对中保存的value
         if(map != null) {
             ThreadLocalMap.Entry e = map.getEntry(this);
             if(e != null) {
@@ -410,6 +410,7 @@ public class ThreadLocal<T> {
      * the table starts running out of space.
      */
     // 类似HashMap。进行元素存取时，要清理遇到的垃圾值，且合并原先紧密相邻的元素（除去垃圾值会造成新空槽）
+    // 垃圾值条件：entry[index].key=null  清理垃圾的操作为：entry[index].value=null，最后将entry[index]=null
     static class ThreadLocalMap {
         
         /**

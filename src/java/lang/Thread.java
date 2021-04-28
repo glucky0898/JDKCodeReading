@@ -227,14 +227,14 @@ public class Thread implements Runnable {
     
     // 临时使用的锁，在设置/获取线程中断回调标记时使用
     private final Object blockerLock = new Object();    // 中断线程时
-    
+
+
     /**
      * ThreadLocal values pertaining to this thread.
      * This map is maintained by the ThreadLocal class.
      */
     // 线程局部缓存，这是一个键值对组合，为当前线程关联一些“独享”变量，ThreadLocal是key。
     ThreadLocal.ThreadLocalMap threadLocals = null;
-    
     /**
      * InheritableThreadLocal values pertaining to this thread.
      * This map is maintained by the InheritableThreadLocal class.
@@ -1730,7 +1730,7 @@ public class Thread implements Runnable {
      * thread's thread group and in any other thread group that
      * has the current thread's thread group as an ancestor
      */
-    // 递归获取当前线程所在线程组的所有线程数量（可能与实际数量有出入，因为线程数量动态变化），建议仅用作监视目的
+    // 递归获取当前线程所在线程组和子线程组的所有线程数量（可能与实际数量有出入，因为线程数量动态变化），建议仅用作监视目的
     public static int activeCount() {
         return currentThread().getThreadGroup().activeCount();
     }

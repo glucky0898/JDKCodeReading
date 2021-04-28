@@ -428,6 +428,7 @@ public class ThreadGroup implements Thread.UncaughtExceptionHandler {
      * @deprecated This method is inherently unsafe.  See
      * {@link Thread#stop} for details.
      */
+    //先stop该线程所在的线程组所有线程以及该线程所在线程组的子线程组，然后在stop本线程
     @Deprecated(since = "1.2")
     public final void stop() {
         if(stopOrSuspend(false))
@@ -756,7 +757,7 @@ public class ThreadGroup implements Thread.UncaughtExceptionHandler {
      *
      * @return if this Thread has already been destroyed.
      */
-    // 将线程组g从当前线程组中移除
+    // 从当前子线程组中找到线程组g，并删除
     private void remove(ThreadGroup g) {
         synchronized(this) {
             if(destroyed) {
