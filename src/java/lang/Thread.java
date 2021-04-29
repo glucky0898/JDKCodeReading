@@ -1051,7 +1051,9 @@ public class Thread implements Runnable {
         // 一直等待
         if(millis == 0) {
             while(isAlive()) {
+                //wait是让当前线程进入wait状态,而调用运行join方法的是主线程即当前线程,因此这里的wait是让主线程wait而不是子线程wait
                 wait(0);
+                //而主线wait()后需要notify或者notifyAll()才能唤醒，这里看不到。在java本地方法中，当子线程结束时，会执行本地方法exit()。exit()方法会执行notifyAll()方法
             }
         
             // 限时等待
@@ -1090,7 +1092,7 @@ public class Thread implements Runnable {
      *                                  cleared when this exception is thrown.
      */
     /*
-     * 使join()的调用者所在的线程进入WAITING或TIMED_WAITING状态；直到当前线程死亡，或者等待超时之后，再去执行上述调用者线程
+     * 使join()的调用者所在的线程(主线程)进入WAITING或TIMED_WAITING状态；直到当前线程(子线程)死亡，或者等待超时之后，再去执行上述调用者所在的线程(主线程)
      * 注：millis的单位是毫秒，且为非负数；nanos的单位是纳秒，其取值范围在1毫秒之内，与millis共同组成超时限制
      */
     public final synchronized void join(long millis, int nanos) throws InterruptedException {
@@ -1215,6 +1217,7 @@ public class Thread implements Runnable {
      * @see #interrupted()
      */
     // （非静态）测试线程是否已经中断，线程的中断状态不受影响
+    //而interrupted()方法不仅判断线程是否中断，还会重置中断的状态
     public boolean isInterrupted() {
         return isInterrupted(false);
     }

@@ -57,6 +57,7 @@ public class AtomicStampedReference<V> {
     private volatile Pair<V> pair;
     
     // VarHandle mechanics
+    //1.8之前，是调用UnSafe的compareAndExchangeObject，将pair作为对象进行CAS
     private static final VarHandle PAIR;
     static {
         try {
@@ -173,6 +174,8 @@ public class AtomicStampedReference<V> {
     // 如果当前引用reference与期望引用expectedReference一致，则使用newStamp原子地更新pair
     public boolean attemptStamp(V expectedReference, int newStamp) {
         Pair<V> current = pair;
+        // (A||B) 若A为true则足以判断结果，因此不会执行B
+        // (A&&B) 若A为false则足以判断结果，因此不会执行B
         return expectedReference == current.reference
             && (newStamp == current.stamp || casPair(current, Pair.of(expectedReference, newStamp)));
     }
@@ -226,7 +229,9 @@ public class AtomicStampedReference<V> {
     
     // 当前类的内部实现，Pair中包含了捆绑了int标记的reference
     private static class Pair<T> {
+        //reference为计算的对象
         final T reference;
+        //stamp为了解决ABA问题引入的版本戳
         final int stamp;
         
         private Pair(T reference, int stamp) {

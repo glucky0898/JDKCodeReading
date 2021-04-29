@@ -54,15 +54,18 @@ import java.util.function.IntUnaryOperator;
  */
 // Integer类型（原子性）
 public class AtomicInteger extends Number implements Serializable {
-    
+
     private static final long serialVersionUID = 6214790243416807050L;
     
     // This class intended to be implemented using VarHandles, but there are unresolved cyclic startup dependencies.
+    //static final 类级公用且不可修改
     private static final jdk.internal.misc.Unsafe U = jdk.internal.misc.Unsafe.getUnsafe();
     
     private volatile int value;
     
-    // 存储字段value在JVM中的偏移地址
+    // 通过反射获取存储字段value在AtomicInteger内部中JVM的偏移地址
+    //对AtomInteger的操作都是通过value的偏移地址，而不是value本身
+    //static final 类级公用且不可修改
     private static final long VALUE = U.objectFieldOffset(AtomicInteger.class, "value");
     
     
