@@ -136,12 +136,24 @@ abstract class Striped64 extends Number {
      * a fallback during table initialization races. Updated via CAS.
      */
     // 当前对象的基值（获取总值时，还要考虑cells中的【操作系数】）
+    // 类似AtomicInteger的value
     transient volatile long base;
     
     /**
      * Spinlock (locked via CAS) used when resizing and/or creating Cells.
      */
-    // 自旋锁，标记cells是否处于繁忙（被操作）状态，繁忙是1，不忙是0
+    /*
+    解决高并发下的核心组件,AtomicInteger只能对value进行操作，高并发下冲突严重;
+    在没有竞争情况下只对base操作。在高并发下，将多个线程操作分散到cells[]中的多个元素中;
+    最后将base和cells[]的操作结果累加得到最终的结果
+    (1)字段含义
+     自旋锁，当要修改cells数组时加锁，防止多线程同时修改cells数组。
+     值为1，表示给cells加锁，cells处于繁忙;值为0，表示不加锁，cells不忙
+    (2)加锁情形
+     - 初始化cells[]，第一次初始化长度为2
+     - 给cells[]扩容，每次扩两倍直到长度大于或等于NCPU
+     - 如果cells[]中某个元素为null,则给该位置创建新的Cell
+    */
     transient volatile int cellsBusy;
     
     // VarHandle mechanics
@@ -178,7 +190,8 @@ abstract class Striped64 extends Number {
      * Returns the probe value for the current thread.
      * Duplicated from ThreadLocalRandom because of packaging restrictions.
      */
-    // 获取当前线程内的探测值
+    // 获取当前线程内的探测值hash
+    //hash是定位当前线程应该将值累加到cells数组哪个位置上
     static final int getProbe() {
         return (int) THREAD_PROBE.get(Thread.currentThread());
     }
@@ -230,16 +243,21 @@ abstract class Striped64 extends Number {
      * @param wasUncontended false if CAS failed before call
      */
     // 对long值进行一些目标操作，包括扩大/缩小/增减等
+    //wasUncontended表示调用longAccumulate前是否发生竞争
     final void longAccumulate(long x, LongBinaryOperator fn, boolean wasUncontended) {
+        //看作线程的随机数
         int h;
         
         // 获取当前线程的探测值（必须先确保当前线程的探测值有效）
+        //参与了cell争用操作的线程threadLocalRandomProbe都不应该为0。threadLocalRandomProbe为0，说明当前线程是第一次进入该方法
         if((h = getProbe()) == 0) {
             ThreadLocalRandom.current(); // force initialization
             h = getProbe();
             wasUncontended = true;
         }
-        
+        //cellsBusy表示cells数组的是否正被操作
+        //wasUncontended代表cell是否有竞争
+        //collide代表是否需要扩容解决竞争比较激烈的情况
         boolean collide = false;                // True if last slot nonempty
         
         for(; ; ) {
@@ -250,8 +268,8 @@ abstract class Striped64 extends Number {
             
             // 如果cells已经存在
             if((cs = cells) != null && (n = cs.length)>0) {
-                // 如果当前线程关联的cell为null，尝试为其创造一个新的cell
-                if((c = cs[(n - 1) & h]) == null) {
+                // 如果当前线程关联的cells的某个单元为null，尝试为其创造一个新的cell
+                if((c = cs[(n - 1) & h]) == null) {//通过线性探测值h和(length-1)相与 实现求模运算 从而获取h所对应的数组下标值
                     // Try to attach new Cell
                     if(cellsBusy == 0) {
                         // Optimistically create
@@ -271,20 +289,21 @@ abstract class Striped64 extends Number {
                             } finally {
                                 cellsBusy = 0;
                             }
+                            //不需要rehash
                             continue;           // Slot is now non-empty
                         }
                     }
                     collide = false;
-                    
-                    // 如果当前线程关联的cell不为null，但是上次更新【操作系数】时失败了，说明此该cell被争用，需要更新一下探测值重新找一个cell
+                    // 如果当前线程关联的cell不为null，wasUncontended为false，说明进行cas失败，此该cell不能被使用，需要更新一下探测值重新找一个cell，并重置wasUncontended = true，以便利用新的hash值重新对cell进行cas
                 } else if(!wasUncontended) {    // CAS already known to fail
                     wasUncontended = true;      // Continue after rehash
                     
-                    // 如果当前线程关联的cell不为null，尝试更新其【操作系数】（wasUncontended已经为true）
+                    // 跳过了上一个else if说明该cell单元不存在竞争（wasUncontended已经为true），对新的hash单元进行cas算术操作
+                    // 若cas成功，跳出循环
                 } else if(c.cas(v = c.value, (fn == null) ? v + x : fn.applyAsLong(v, x))) {
                     break;
                     
-                    // 如果cell的数量已经超过了虚拟机可用的处理器数量，或者，cells被别的线程扩容了，则不需要纠结碰撞的问题
+                    // 如果cell的数量已经超过了虚拟机可用的处理器数量，或者，cells被别的线程扩容了(cells != cs)，则不需要纠结碰撞的问题
                 } else if(n >= NCPU || cells != cs) {
                     // 重置collide为false，表示当前没有发生碰撞
                     collide = false;            // At max size or stale
@@ -313,10 +332,10 @@ abstract class Striped64 extends Number {
                     continue;                   // Retry with expanded table
                 }
                 
-                // 更新当前线程内的探测值，并返回更新后的值
+                // 进行rehash,更新当前线程内的探测值，并返回更新后的值
                 h = advanceProbe(h);
                 
-                // 如果cells不存在，且获取到cells的操作权
+                // cells非忙且cells为被初始化，则进行初始化
             } else if(cellsBusy == 0 && cells == cs && casCellsBusy()) {
                 // Initialize table
                 try {
@@ -369,14 +388,14 @@ abstract class Striped64 extends Number {
             
             // 如果cells已经存在
             if((cs = cells) != null && (n = cs.length)>0) {
-                // 如果当前线程关联的cell为null，尝试为其创造一个新的cell
+                // 如果当前线程关联的cell为null且cells未产生线程竞争时，尝试为其创造一个新的cell
                 if((c = cs[(n - 1) & h]) == null) {
                     // Try to attach new Cell
                     if(cellsBusy == 0) {
                         // 先计算x的二进制格式，然后返回该二进制格式表示的long
                         long bits = Double.doubleToRawLongBits(x);
                         Cell r = new Cell(bits);
-                        
+
                         // 获取cells的控制权
                         if(cellsBusy == 0 && casCellsBusy()) {
                             try {               // Recheck under lock
@@ -392,30 +411,30 @@ abstract class Striped64 extends Number {
                             } finally {
                                 cellsBusy = 0;
                             }
-                            
+
                             continue;           // Slot is now non-empty
                         }
                     }
-                    
+
                     collide = false;
-                    
-                    // 如果当前线程关联的cell不为null，但是上次更新【操作系数】时失败了，说明此该cell被争用，需要更新一下探测值重新找一个cell
+
+                    // 如果当前线程关联的cell不为null，但是上次对cell单元进行cas时失败了，说明此该cell被争用，需要更新一下探测值重新找一个cell
                 } else if(!wasUncontended) {    // CAS already known to fail
                     wasUncontended = true;      // Continue after rehash
-                    
-                    // 如果当前线程关联的cell不为null，尝试更新其【操作系数】（wasUncontended已经为true）
+
+                    // 如果当前线程关联的cell不为null，上一次对cell单元进行cas时失败了，这次再进行一次cas（wasUncontended已经为true）
                 } else if(c.cas(v = c.value, apply(fn, v, x))) {
                     break;
-                    
+
                     // 如果cell的数量已经超过了虚拟机可用的处理器数量，或者，cells被别的线程扩容了，则不需要纠结碰撞的问题
                 } else if(n >= NCPU || cells != cs) {
                     // 重置collide为false，表示当前没有发生碰撞
                     collide = false;            // At max size or stale
-                    
+
                     // 此时发生了碰撞，需要更新collide为true，下一轮进来可能要扩容
                 } else if(!collide) {
                     collide = true;
-                    
+
                     // 获取cells的控制权，并着手扩容
                 } else if(cellsBusy == 0 && casCellsBusy()) {
                     try {
@@ -428,17 +447,17 @@ abstract class Striped64 extends Number {
                         // 释放cells的控制权
                         cellsBusy = 0;
                     }
-                    
+
                     // 重置collide状态
                     collide = false;
-                    
+
                     // 扩容后不更新探测值，而是在当前的cell位置重试
                     continue;                   // Retry with expanded table
                 }
-                
+
                 // 更新当前线程内的探测值，并返回更新后的值
                 h = advanceProbe(h);
-                
+
                 // 如果cells不存在，且获取到cells的操作权
             } else if(cellsBusy == 0 && cells == cs && casCellsBusy()) {
                 // Initialize table
@@ -455,7 +474,7 @@ abstract class Striped64 extends Number {
                     // 释放cells的控制权
                     cellsBusy = 0;
                 }
-                
+
                 /*
                  * 如果cells不存在，且无法获取到cells的操作权（被别的线程抢走了控制权）
                  * 则尝试在base上做更新，如果尝试成功，则结束目标操作，否则，重新执行上面的for循环
@@ -482,8 +501,13 @@ abstract class Striped64 extends Number {
      * JVM intrinsics note: It would be possible to use a release-only
      * form of CAS here, if it were provided.
      */
-    // 分段存储当前对象的【操作系数】，缓解线程争用
+    /*
+    伪共享问题，一个缓存行有8个long大小(64子节)，假如long x、y、z 在一个缓存行，若为了让x失效，则x所在的整个缓存行都得失效，即y、z也失效
+    但实际y、z并未失效，因此称为伪共享
+    jdk.internal.vm.annotation.Contended解决伪共享问题，对每个Cell[]单元填充7个long大小数据，防止Cell[]数组中相邻的元素落到同一个缓存行里
+    * */
     @jdk.internal.vm.annotation.Contended
+    // 分段存储当前对象的【操作系数】，缓解线程争用
     static final class Cell {
         // 【操作系数】，参见cells参数
         volatile long value;

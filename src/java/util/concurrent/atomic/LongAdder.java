@@ -102,17 +102,26 @@ public class LongAdder extends Striped64 implements Serializable {
         long b, v;
         int m;
         Cell c;
-        
+        /*外层条件解读(前面条件都是铺垫，最后一个才是关键)
+          cells未被初始化，先直接对base操作，若操作成功直接返回，
+          若失败说明存在竞争，则进入内循环,借用cells解决冲突
+        */
         if((cs = cells) != null // 如果cells已经存在，则尝试更新cell
             || !casBase(b = base, b + x)) { // 如果cells不存在，则尝试更新基值
             
             /* 至此，说明cells存在，或者cells不存在，且基值更新失败 */
             
             boolean uncontended = true;
+            /*内层条件解读(前面条件都是铺垫，最后一个才是关键)
+            可直接解读：
+            if (cs != null && (m = cs.length - 1) >= 0 && (c = cs[getProbe() & m]) != null) {if(uncontended = c.cas(c.value, v + x)) return;}
+             即若cells非空且有效且该探测值下的cells单元非空，则借用该单元进行算术操作
+             若利用该单元操作成功，直接返回。若失败,说明该单元存在竞争,进入longAccumulate进行后续操作
+            * */
             if(cs == null   // cells不存在，且基值更新失败
                 || (m = cs.length - 1)<0    // cells存在但无效（长度为0）
                 || (c = cs[getProbe() & m]) == null // cells存在且有效，且当前线程关联的cell为null（很可能是探测值无效引起的）
-                || !(uncontended = c.cas(v = c.value, v + x))) { // cells存在且有效，且当前线程关联着非空cell，则尝试更新该cell内的【操作系数】
+                || !(uncontended = c.cas(v = c.value, v + x))) { // cells存在且有效，且当前线程关联着非空cell，则尝试更新该cell内的【操作系数】,v为cell存的旧值，x为新值，因此需要使用v+x更新旧值
                 longAccumulate(x, null, uncontended);
             }
         }
@@ -213,7 +222,7 @@ public class LongAdder extends Striped64 implements Serializable {
      * method is intrinsically racy, it should only be used when it is
      * known that no threads are concurrently updating.
      */
-    // 重置当前的整数加法器
+    // 重置当前的整数加法器,base以及cell中存的值都设为0
     public void reset() {
         Cell[] cs = cells;
         base = 0L;

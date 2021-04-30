@@ -101,6 +101,9 @@ public abstract class AtomicIntegerFieldUpdater<T> {
      *                                  or the field is inaccessible to the caller according to Java language
      *                                  access control
      */
+    //tclass为需要修改的目标类
+    //在MainTest中的main方法中调用AtomicLongFieldUpdater.newUpdater，则Reflection.getCallerClass()返回MainTest.class
+    //因此Reflection.getCallerClass()返回调用newUpdater方法的方法调用者(main)所在的类(MainTest)
     @CallerSensitive
     public static <U> AtomicIntegerFieldUpdater<U> newUpdater(Class<U> tclass, String fieldName) {
         return new AtomicIntegerFieldUpdaterImpl<U>(tclass, fieldName, Reflection.getCallerClass());

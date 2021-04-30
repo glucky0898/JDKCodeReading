@@ -100,6 +100,7 @@ public class MethodHandles {
      * values to different callers.
      * @return a lookup object for the caller of this method, with private access
      */
+    //访问类非私有属性
     @CallerSensitive
     @ForceInline // to ensure Reflection.getCallerClass optimization
     public static Lookup lookup() {
@@ -184,6 +185,7 @@ public class MethodHandles {
      * @spec JPMS
      * @see Lookup#dropLookupMode
      */
+    //访问类私有属性
     public static Lookup privateLookupIn(Class<?> targetClass, Lookup lookup) throws IllegalAccessException {
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) sm.checkPermission(ACCESS_PERMISSION);
@@ -2689,6 +2691,8 @@ return mh1;
      * @throws IllegalArgumentException if arrayClass is not an array type
      * @since 9
      */
+    /*▼获取VarHandle句柄，包括非私有属性、私有属性、静态属性、数组类型属性等 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┓ */
+    //访问类中的数组
     public static
     VarHandle arrayElementVarHandle(Class<?> arrayClass) throws IllegalArgumentException {
         return VarHandles.makeArrayElementHandle(arrayClass);
@@ -2865,6 +2869,7 @@ return mh1;
         return VarHandles.makeByteBufferViewHandle(viewArrayClass,
                                                    byteOrder == ByteOrder.BIG_ENDIAN);
     }
+    /*▲ 获取VarHandle变量句柄 ████████████████████████████████████████████████████████████████████████████████┛ */
 
 
     /// method handle invocation (reflective style)
