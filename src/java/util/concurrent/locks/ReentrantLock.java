@@ -167,7 +167,15 @@ public class ReentrantLock implements Lock, Serializable {
      * purposes and lies dormant until the lock has been acquired,
      * at which time the lock hold count is set to one.
      */
-    // 申请独占锁，允许阻塞带有中断标记的线程（不一定成功）
+    // 申请独占锁，允许阻塞带有中断标记的线程（不响应中断）
+    /*如非公平锁进行lock()的具体过程
+      1.sync.acquire(1)进入AQS的实现方法，开始尝试获取锁
+      2.AQS的实现方法中有个if(!tryAcquire(arg)){将线程添加到同步队列}，tryAcquire(arg)的具体现实方法由Syn的nonfairTryAcquire()方法实现
+      3.nonfairTryAcquire()的具体实现方法如下：
+        - 1.若state==0代表没有锁被占用，CAS更改state为0，若成功返回true,线程不被加入到同步队列中，可以继续运行。若CAS失败，说明在更改过程中被其他线程更改了，从而说明锁被其他线程占用，返回false，则线程进入到方法体{将线程添加到同步队列}中
+        - 2.若state!=0代表锁被占用，有两种原因。一个是被当前线程占用，再次调用lock()获取锁是因为进入其他重入方法
+        另一个原因是被其他线程占用。若是前者，只需要判断当前锁的占用者是否为本线程并更改state数量，若是后者则返回false,进入到方法体{将线程添加到同步队列}中
+    * */
     public void lock() {
         // 生产一张许可证
         sync.acquire(1);
@@ -219,7 +227,7 @@ public class ReentrantLock implements Lock, Serializable {
      *
      * @throws InterruptedException if the current thread is interrupted
      */
-    // 申请独占锁，不允许阻塞带有中断标记的线程（不一定成功）
+    // 申请独占锁，不允许阻塞带有中断标记的线程（响应中断）
     public void lockInterruptibly() throws InterruptedException {
         // 生产一张许可证
         sync.acquireInterruptibly(1);
@@ -350,7 +358,8 @@ public class ReentrantLock implements Lock, Serializable {
      */
     // 释放独占锁，如果锁已被完全释放，则唤醒后续的阻塞线程
     public void unlock() {
-        // 消费一张许可证
+        // 若state=1,release(1)后，state=0，则刚好锁被释放
+        // 若state>1,release(1)后，state>0，该线程还仍然占用锁，只是调用下一层可重入方法的unlock()方法
         sync.release(1);
     }
     
@@ -704,10 +713,10 @@ public class ReentrantLock implements Lock, Serializable {
     /*
      * 同步队列的实现者，实现了锁的语义
      *
-     * 许可证数量==0：当前锁空闲
-     * 许可证数量>0，当前锁被某一线程持有
-     * 一个线程多次进入锁时，许可证数量会递增
-     * 当线程释放锁时，许可证数量减少，直到为0
+     * state==0：当前锁空闲
+     * state>0，当前锁被某一线程持有,state的数量代表锁被重入的次数
+     * 一个线程多次进入锁时，state数量会递增
+     * 当线程释放锁时，state数量减少，直到为0
      */
     abstract static class Sync extends AbstractQueuedSynchronizer {
         
@@ -723,7 +732,7 @@ public class ReentrantLock implements Lock, Serializable {
             // 获取申请锁的线程
             final Thread current = Thread.currentThread();
             
-            // 当前许可证数量
+            //state 在这里代表的锁的状态，c==0 代表锁未被占用，c==1代表锁被线程占用，c>1代表占用该锁的线程重入次数
             int c = getState();
             
             // 如果锁没有被任何线程占用
@@ -806,19 +815,22 @@ public class ReentrantLock implements Lock, Serializable {
         }
         
         // 释放一次锁，返回值表示同步锁是否处于自由状态（无线程持有）
+        /*
+          实现父类AQS的protected boolean tryRelease(int arg)方法，公平/非公平只在获取锁才区分，释放是一样的动作
+         */
         @ReservedStackAccess
         protected final boolean tryRelease(int releases) {
             // 计算应该剩余的许可证数量
             int c = getState() - releases;
             
-            // 如果当前线程不是锁的占用者，抛出异常
+            // 锁只有一个，既然释放锁，则锁的占用者必须是本线程。否则，抛出异常
             if(!isHeldExclusively()) {
                 throw new IllegalMonitorStateException();
             }
             
             // 记录许可证是否被全部消费，如果全部消费，则锁处于自由状态
             boolean free = false;
-            
+            //c==0说明锁不被任何线程占用
             if(c == 0) {
                 free = true;
                 // 清空当前锁的持有者
@@ -883,7 +895,7 @@ public class ReentrantLock implements Lock, Serializable {
     static final class NonfairSync extends Sync {
         private static final long serialVersionUID = 7316153563782823691L;
         
-        // 申请一次非公平锁
+        // 实现AQS#Sync的tryAcquire()的具体实现方法
         protected final boolean tryAcquire(int acquires) {
             return nonfairTryAcquire(acquires);
         }
@@ -910,7 +922,7 @@ public class ReentrantLock implements Lock, Serializable {
          * Fair version of tryAcquire.  Don't grant access unless
          * recursive call or no waiters or is first.
          */
-        // 申请一次公平锁
+        // 实现AQS#Sync的tryAcquire()的具体实现方法
         @ReservedStackAccess
         protected final boolean tryAcquire(int acquires) {
             return fairTryAcquire(acquires);
