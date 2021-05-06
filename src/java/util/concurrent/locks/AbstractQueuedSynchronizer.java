@@ -408,6 +408,10 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
             
             // 当node进入排队后再次尝试申请锁，如果还是失败，则可能进入阻塞
             if(acquireQueued(node, arg)){
+                /*
+                * acquireQueued返回true,说明在获取锁/阻塞期间,收到其他线程中断信号没有及时进行设置，现在要进行补偿
+                * 如果该线程在lock代码块内部有调用sleep（）之类的阻塞方法，就可以抛出异常，响应该中断信号
+                * */
                 // 获取到资源后，如果线程解除阻塞时拥有中断标记，此处要进行设置
                 selfInterrupt();
             }
@@ -457,6 +461,7 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
      * @return {@code true} if interrupted while waiting
      */
     // 当node进入排队后再次尝试申请锁，如果还是失败，则可能进入阻塞
+    //虽然该函数不会中断响应，但它会记录被阻塞期间有没有其他线程向它发送过中断信号。如果有，则该函数会返回true；否则，返回false
     final boolean acquireQueued(final Node node, int arg) {
         
         // 记录当前线程从阻塞中醒来时的中断标记（阻塞(park)期间也可设置中断标记）
@@ -466,7 +471,7 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
             /*
              * 死循环，成功申请到锁后退出
              *
-             * 每个陷入阻塞的线程醒来后，需要重新申请锁
+             * 每个陷入阻塞的线程醒来(被unpark或者park期间线程被中断，则会打断park)后，需要重新申请锁，因此使用死循环
              * 只有当自身排在队首时，才有权利申请锁
              * 申请成功后，需要丢弃原来的头结点，并将自身作为头结点，然后返回
              */
@@ -1184,7 +1189,7 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
                 }
             }
 
-            // 如果头结点未变更，则说明期间持有锁的线程未发生变化，能够走到这一步说明前面的操作已经成功完成
+            // 如果头结点未变更，则说明期间持有锁的线程未发生变化(后续结点不需要被唤醒)，能够走到这一步说明前面的操作已经成功完成
             if(h == head){
                 break;
             }
@@ -2055,7 +2060,7 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
      */
     // 设置线程进入阻塞状态，并清除线程的中断状态。返回值代表之前线程是否处于阻塞状态
     private final boolean parkAndCheckInterrupt() {
-        // 设置线程阻塞（对标记为中断的线程无效）
+        // 设置线程阻塞（对标记为中断的线程，不会被阻塞，因此除了unpark唤醒线程外，设置中断可唤醒线程）
         LockSupport.park(this);
         return Thread.interrupted();
     }
@@ -2583,7 +2588,7 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
             Node node = addConditionWaiter();
             
             /*
-             * node准备被await,丢弃node所在线程持有的所有许可证（数量由savedState保存），并唤醒【|同步队列|】中node结点后续的阻塞线程
+             * node准备被await,丢弃node所在线程持有的所有锁（数量由savedState保存），否则会造成死锁。最后唤醒【|同步队列|】中node结点后续的阻塞线程
              * 这样一来，同步队列中node结点后续线程又可以开始抢锁了
              */
             int savedState = fullyRelease(node);
@@ -2908,7 +2913,7 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
         *  signalAll用于将条件队列中所有处于等待状态的结点从条件队列转移到同步队列,让他们处于待唤醒状态,以参与竞争资源
         * */
         public final void signal() {
-            // 调用signal()方法的线程必须持有锁
+            // 只有持有锁的线程，才有资格调用signal()方法
             // 如果当前线程不是锁的占用者，抛出异常
             if(!isHeldExclusively()) {
                 throw new IllegalMonitorStateException();
@@ -3077,8 +3082,8 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
          * @return its new wait node
          */
         /*
-         * 添加一个新的[条件Node]到【|条件队列|】，该Node缓存了对当前线程的引用
-         * 添加完成后，返回刚添加的node
+         * 添加一个新的[条件Node]到【|条件队列|】，该Node缓存了对当前线程的引用，添加完成后，返回刚添加的node
+         * 线程调用await()的时候，肯定已经先拿到了锁。所以，在addConditionWaiter()内部，对这个条件队列的操作不需要执行CAS操作
          */
         private Node addConditionWaiter() {
             // 如果当前线程不是锁的占用者，抛出异常

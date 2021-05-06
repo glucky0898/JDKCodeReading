@@ -164,6 +164,11 @@ import java.util.concurrent.locks.AbstractQueuedSynchronizer;
  * 但是，必须等所有闸门都撤销后，所有等待的线程才能顺次被唤醒
  * 这个过程就像开闸放水一样...
  */
+/*大概过程
+* state 等于闸门数量  调用await()的线程即等待闸门的线程(主线程，可能多个)，当state!=0 说明还存在闸门，不能被放行，进入AQS的同步队列中被阻塞
+* 调用countDown的线程即开闸门的线程(子线程)，每调用一次countDown，闸门数减一
+* 某个子线程在开闸门(state=state-1)过程中，发现更新后的state=0，则一次性唤醒在AQS的同步队列中所有主线程
+* */
 public class CountDownLatch {
     private final Sync sync;
     
@@ -313,20 +318,23 @@ public class CountDownLatch {
         }
         
         // 查询是否可以运行，只要存在闸门，就继续阻塞
+        //当state=0,则不会被阻塞，主线程继续运行。state!=0,返回-1。则将主线程放入到同步队列中进行阻塞
         protected int tryAcquireShared(int acquires) {
             return (getState() == 0) ? 1 : -1;
         }
         
-        // 撤销闸门
+        // 撤销闸门 返回true:唤醒同步队列中的主线程  返回false.不唤醒
         protected boolean tryReleaseShared(int releases) {
             // Decrement count; signal when transition to zero
             for(; ; ) {
                 int c = getState();
+                //说明主线程已经被唤醒，返回false,不需要唤醒主线程
                 if(c == 0) {
                     return false;
                 }
                 int nextc = c - 1;
                 if(compareAndSetState(c, nextc)) {
+                    //nextc=0,说明所有子线程都完成。nextc!=0,还有子线程未完成，返回false，不唤醒主线程
                     return nextc == 0;
                 }
             }

@@ -215,7 +215,8 @@ public class LockSupport {
      * 如果陷入阻塞后等待许可，则可由别的线程发给它许可（在别的线程中调用unpark）。
      * 使用线程中断也可以唤醒陷入阻塞的线程。
      *
-     * 注：对标记为中断的线程使用阻塞无效
+     * park方法可以阻塞当前线程，如果调用unpark方法或者中断当前线程，则会从park方法中返回。park方法对中断方法的响应和 sleep 有一些不太一样。它不会抛出中断异常，而是从park方法直接返回，不影响线程的继续执行
+     * 因此对标记为中断的线程使用park，阻塞无效
      */
     public static void park(Object blocker) {
         Thread t = Thread.currentThread();
