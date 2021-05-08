@@ -166,7 +166,12 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E> implements B
             // 如果入队任务排在了队首
             if(queue.peek() == e) {
                 leader = null;
-                // 队头有新任务达到，唤醒阻塞线程
+                /*
+                * 为什么只有新来的成为队首元素才调用signal
+                * 1.假设队列为空时，线程调用take，被无限期阻塞。需要有人唤醒该线程，而这个任务交给了首个入队的元素
+                * 2.假设队列不为空时，线程调用take，被有限期阻塞。通过本次signal，被提前唤醒时，再次进入for循环，查看队首元素是否到期
+                * 若新队头到期，可以较快获取本次的队头元素。否则只能等待到期时间排第二的元素主动唤醒，去获取队头元素
+                * */
                 available.signal();
             }
             return true;
@@ -372,7 +377,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E> implements B
                         // 记录首个被阻塞的线程
                         leader = thisThread;
                         try {
-                            // 在任务触发之前阻塞
+                            // 在任务触发之前阻塞有限的时间
                             available.awaitNanos(delay);
                         } finally {
                             // 醒来后，置空leader，重新参与循环，以获取队头任务

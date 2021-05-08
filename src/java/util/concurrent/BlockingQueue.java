@@ -184,6 +184,14 @@ import java.util.Queue;
  * 1.阻塞队列是线程安全的，入队/出队互不干扰
  * 2.在不满足入队/出队条件时，可以选择阻塞操作线程，或选择快速失败
  */
+/*
+* 入队：add、offer、put
+* 1.add/offer 返回boolean,不会被阻塞。当队列满时，add无法入队时扩容或抛异常，offer无法入队时扩容或返回false
+* 2.put 无返回值，可抛中断异常。当队列满时扩容或可被阻塞，
+* 出队：remove、peek、take
+* 1.remove/peek,非阻塞
+* 2.take,队列空时，阻塞
+* */
 public interface BlockingQueue<E> extends Queue<E> {
     
     /*▼ 入队 ████████████████████████████████████████████████████████████████████████████████┓ */

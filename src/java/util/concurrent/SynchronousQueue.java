@@ -315,6 +315,7 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
         if(transferer.transfer(e, false, 0) == null) {
             // 清除线程的中断状态
             Thread.interrupted();
+            // 如果传输失败，直接让线程中断并抛出中断异常
             throw new InterruptedException();
         }
     }
@@ -371,7 +372,7 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
      */
     // 出队，线程安全，没有互补操作/结点时，线程被阻塞
     public E take() throws InterruptedException {
-        // 无需等待超时
+        // 第一个参数为null表示是消费者，要取元素
         E e = transferer.transfer(null, false, 0);
         
         if(e != null) {
@@ -763,6 +764,7 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
          * unlinked from queue because it was the last inserted node
          * when it was cancelled.
          */
+        //中断(取消)尾结点时，不是直接清除，而是借用了cleanMe进行清除
         transient volatile QNode cleanMe;
         
         // VarHandle mechanics
@@ -790,6 +792,11 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
          * Puts or takes an item.
          */
         // "传递"数据，匹配/抵消操作
+        /*take/put大概过程
+        * put时，创建QNode结点，将该新结点放入到队列尾部，并将当前线程赋给新结点的waiter引用，值赋给item引用,然后阻塞创建的结点
+        * take时，从队列的头部开始寻找put放入的结点(称为put结点,isData=false),将put结点的值item=null,引用的等待线程waiter=null，并将删除旧结点，将put结点设置为新头结点(头结点是个傀儡结点)。最后唤醒put结点。put结点的返回item值，最后put结点跳出了for死循环。take结点返回put结点的item值，跳出了for死循环
+        * 最终put和take结点完成了匹配的过程
+        * */
         @SuppressWarnings("unchecked")
         E transfer(E e, boolean timed, long nanos) {
             /* Basic algorithm is to loop trying to take either of two actions:
@@ -819,6 +826,7 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
             QNode s = null; // constructed/reused as needed
             
             // 当前结点是否为数据结点。当遇到"存"操作时，该结点成为数据结点
+            //take:isData=false  put:isData=true
             boolean isData = (e != null);
             
             for(; ; ) {
@@ -832,7 +840,7 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
                     continue;
                 }
                 
-                // 队列为空，或者队尾结点与当前结点的数据模式一致
+                // 队列为空，或者队尾结点与当前结点的数据模式一致，则入队
                 if(h == t || t.isData == isData) { // empty or same-mode
                     // 指向队尾之后的结点
                     QNode tn = t.next;
@@ -864,20 +872,28 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
                         continue;
                     }
                     
-                    // 原子地将队尾更新为s
+                    // 原子地将队尾更新为s。
+                    // tail原先指向t改为将tail指向插入的结点s。
                     advanceTail(t, s);              // swing tail and wait
                     
-                    // 尝试阻塞当前线程（操作），直到匹配的操作到来后唤醒它，返回数据域
+                    // 尝试阻塞当前线程（操作），将插入结点的waiter引用指向当前被阻塞的线程，直到匹配的操作到来后唤醒它，返回数据域
+                    //被take唤醒时，x=null。被中断唤醒时，x=s
                     Object x = awaitFulfill(s, e, timed, nanos);
                     
-                    // 如果结点已经被标记为取消
+                    // x==s 说明被中断唤醒，则结点被标记为取消，进入clean方法
                     if(x == s) {                   // wait was cancelled
                         clean(t, s);
                         return null;
                     }
                     
                     // 如果s.next!=s，即s仍在队列中
+                    // s未被取消，表明仍在队列中返回false,取消返回true.
+                    /*
+                    * 1.执行到这步，说明put结点从awaitFulfill中被唤醒，即有take线程被调用或者中断了put线程
+                    * 2.若put结点还在队列中，则将put结点设置为新头结点，并将item指向put结点本身(相当于被取消/清除),并将引用的线程设置为null。则put线程结束。
+                    * */
                     if(!s.isOffList()) {           // not already unlinked
+                        //将s设为头结点，删除旧头结点t
                         advanceHead(t, s);          // unlink if head
                         
                         // 遗忘数据域，跟取消的效果一样
@@ -885,7 +901,7 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
                             s.item = s;
                         }
                         
-                        s.waiter = null;
+                        s.waiter = null;//将put时被阻塞的线程设置为null.
                     }
                     
                     return (x != null) ? (E) x : e;
@@ -907,9 +923,9 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
                     
                     // 取出队头数据（这里可能出现线程争用）
                     Object x = m.item;
-                    if(isData == (x != null) ||    // m already fulfilled（该结点已被其它线程处理了）
+                    if(isData == (x != null) ||    // m already fulfilled（该结点已被其它线程处理了，x=null，说明该结点m被消费了）
                         x == m ||                  // m cancelled（该结点已经被取消了）
-                        !m.casItem(x, e)) {        // lost CAS（更新数据域，以便awaitFulfill()方法被唤醒后退出）
+                        !m.casItem(x, e)) {        // lost CAS（更新数据域，以便awaitFulfill()方法被唤醒后退出），对于take操作，则把m的item设置为null
                         
                         /* 线程争用失败的线程到这里 */
                         
@@ -927,6 +943,7 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
                     advanceHead(h, m);              // successfully fulfilled
                     
                     // 唤醒阻塞的操作/结点/线程
+                    // 唤醒的是执行put时，被阻塞的线程
                     LockSupport.unpark(m.waiter);
                     
                     // 返回数据
@@ -958,11 +975,16 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
             
             for(; ; ) {
                 // 如果当前线程带有中断标记，则取消操作
+                /*取消操作
+                s结点存的元素item为e,将item改为结点自身。而item指向自身代表取消QNode结点
+                * */
                 if(w.isInterrupted()) {
                     s.tryCancel(e);
                 }
                 
-                // 操作已经被取消，或者该结点已被处理（数据域会发生变化）
+                // 操作已经被取消，或者该结点已被处理,因为弹出时会将item值赋值为null。（数据域会发生变化）
+                //有其他线程执行take操作时，会把匹配的结点对应的item设置为null，并唤醒put线程。被唤醒后再次执行到这一步时，put跳出死循环返回x
+                //中断操作时,s.item被设置为s，且被park的线程停止被阻塞，再次执行到这一步时，put跳出死循环返回x
                 Object x = s.item;
                 if(x != e) {
                     return x;
@@ -1257,7 +1279,7 @@ public class SynchronousQueue<E> extends AbstractQueue<E> implements BlockingQue
                         if(h != null && h.isCancelled()) {
                             casHead(h, h.next);     // pop cancelled node
                         } else {
-                            // 这种情形参见offer()和poll()方法
+                            //否则，直接返回null（超时返回null）
                             return null;
                         }
                     } else {
