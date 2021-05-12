@@ -103,7 +103,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
     // 任务状态标记
     private volatile int state;
     
-    private static final int NEW          = 0;  // 新建任务
+    private static final int NEW          = 0;  // 新建任务，只有state不是NEW状态，都表示runner线程已经执行结束(正常/异常)
     private static final int COMPLETING   = 1;  // 任务已结束
     private static final int NORMAL       = 2;  // 任务正常结束，并设置了返回值
     private static final int EXCEPTIONAL  = 3;  // 任务异常结束，并设置了异常信息
@@ -124,7 +124,8 @@ public class FutureTask<V> implements RunnableFuture<V> {
     private volatile Thread runner;
     
     /** Treiber stack of waiting threads */
-    // 等待栈的栈顶游标，等待栈用于存储那些正在等待计算结果的线程
+    // 等待栈的栈顶游标，等待栈用于存储那些正在等待计算结果outcome的线程。而runner是执行计算过程的线程
+    // 当线程获取runner执行结果时，runner未完成，则会被阻塞该线程，把该线程放入到栈顶waiters。该栈是等待同一的结果outcome的被阻塞线程的集合
     private volatile WaitNode waiters;
     
     // VarHandle mechanics
@@ -179,6 +180,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
      * @throws NullPointerException if the runnable is null
      */
     public FutureTask(Runnable runnable, V result) {
+        //返回的是实现callable的RunnableAdapter类，该类内部包含了Runnable以及T result 两个成员变量
         this.callable = Executors.callable(runnable, result);
         this.state = NEW;       // ensure visibility of callable
     }
@@ -292,9 +294,12 @@ public class FutureTask<V> implements RunnableFuture<V> {
     // 中止异步任务，包括取消或中断，mayInterruptIfRunning指示是否可在任务执行期间中断线程
     public boolean cancel(boolean mayInterruptIfRunning) {
         // 决定使用中断标记还是取消标记
+        //mayInterruptIfRunning=false,不会中断正在执行的线程，但outcome不被设置值
+        //mayInterruptIfRunning=true,会中断正在执行的线程，给runner线程设一个中断标记
         int s = mayInterruptIfRunning ? INTERRUPTING : CANCELLED;
         
         // 尝试更新任务状态：NEW-->INTERRUPTING/CANCELLED，如果更新失败，则直接返回
+        //state!=NEW代表任何已经执行结束了
         if(!(state==NEW && STATE.compareAndSet(this, NEW, s))) {
             return false;
         }
@@ -314,7 +319,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
                 }
             }
         } finally {
-            // 任务结束后，唤醒所有等待结果的线程
+            // 不设置outcome，直接唤醒所有等待结果的线程
             finishCompletion();
         }
         
@@ -343,7 +348,8 @@ public class FutureTask<V> implements RunnableFuture<V> {
             // 保存计算结果
             outcome = v;
             
-            // 尝试更新任务状态：COMPLETING-->NORMAL
+            // 尝试更新任务状态成NORMAL
+            //不用CAS是因为可能有其他线程进行中断操作，将state修改，而此时我们已经outcome=v了，因此不理会state的修改，直接设置成NORMAL
             STATE.setRelease(this, NORMAL); // final state
             
             // 任务结束后，唤醒所有等待线程
@@ -389,9 +395,9 @@ public class FutureTask<V> implements RunnableFuture<V> {
         /* assert state > COMPLETING; */
         
         for(WaitNode q; (q = waiters) != null; ) {
-            // 使waiters==null，因为任务已经结束，不需要继续等待了
+            // 因为任务已经结束，获取结果的线程不再被阻塞,清空该栈,即，waiters=null，。
             if(WAITERS.weakCompareAndSet(this, q, null)) {
-                // 遍历等待栈，唤醒所有等待线程
+                // 计算结果已经出来了，遍历等待栈，唤醒所有等待线程
                 for(; ; ) {
                     Thread t = q.thread;
                     if(t != null) {
@@ -439,7 +445,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
     private void handlePossibleCancellationInterrupt(int s) {
         // It is possible for our interrupter to stall before getting a chance to interrupt us.  Let's spin-wait patiently.
         if(s == INTERRUPTING) {
-            // 任务正在中断，则等待中断完成
+            // 任务正在中断，则等待中断完成，直到state变成INTERRUPTED
             while(state == INTERRUPTING) {
                 // 当前线程让出CPU时间片，大家重新抢占执行权
                 Thread.yield(); // wait out pending interrupt
@@ -510,7 +516,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
                 // 抛出异常
                 throw new InterruptedException();
                 
-                // 如果等待结点为空，则新建一个等待结点
+                // 任务还在执行中，则创建结点
             } else if(q == null) {
                 // 如果启用了超时设置，且确实已经超时了，直接返回
                 if(timed && nanos<=0L) {
@@ -621,7 +627,7 @@ retry:
     public V get() throws InterruptedException, ExecutionException {
         int s = state;
         
-        // 如果任务未结束
+        // 还在执行或者正在设置执行结果时
         if(s<=COMPLETING) {
             // 获取任务的状态标记，任务未结束时会一直阻塞
             s = awaitDone(false, 0L);
@@ -734,7 +740,7 @@ retry:
      * stack.  See other classes such as Phaser and SynchronousQueue
      * for more detailed explanation.
      */
-    // 等待结点
+    // 等待结点，如调用get方法，被阻塞的线程
     static final class WaitNode {
         volatile Thread thread; // 正在等待计算结果的线程
         volatile WaitNode next; // 前一个等待结点

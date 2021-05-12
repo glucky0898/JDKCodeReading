@@ -416,6 +416,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      */
     
     // 线程池状态标记，运行状态初始为RUNNING，工作线程数量初始为0
+    //ctl的前三位表示runState状态值，后29位表示线程的workerCount数量
     private final AtomicInteger ctl = new AtomicInteger(ctlOf(RUNNING, 0));
     
     /* runState is stored in the high-order bits */
@@ -425,10 +426,15 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     private static final int COUNT_MASK = (1 << COUNT_BITS) - 1; // 0b-0x 0001-FFF FFFF‬
     
     // 由线程池状态标记的前3个比特位记录线程池的运行状态
+    //接收新任务，执行工作队列中的任务
     private static final int RUNNING    = -1 << COUNT_BITS; // 0b-0x 1110-000 0000，【运行】
+    //不接收新任务，执行工作队列中的任务
     private static final int SHUTDOWN   =  0 << COUNT_BITS; // 0b-0x 0000-000 0000，【关闭】
+    //不接收新任务，不执行工作队列中的任务，中断正执行的任务
     private static final int STOP       =  1 << COUNT_BITS; // 0b-0x 0010-000 0000，【停止】
+    //队列中和和正在执行所有任务执行完，且线程池为空
     private static final int TIDYING    =  2 << COUNT_BITS; // 0b-0x 0100-000 0000，【完结】
+    //调用terminated方法后,进入该状态
     private static final int TERMINATED =  3 << COUNT_BITS; // 0b-0x 0110-000 0000，【终止】
     
     private static final boolean ONLY_ONE = true;
@@ -458,7 +464,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     /**
      * Set containing all worker threads in pool. Accessed only when holding mainLock.
      */
-    // 线程池，存储【  核心Worker】与【非核心Worker】
+    // 用于记录当前线程池中所有的工作线程，存储【核心Worker】与【非核心Worker】。
     private final HashSet<Worker> workerPool = new HashSet<>();
     
     /**
@@ -472,7 +478,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * return null even if it may later return non-null when delays
      * expire.
      */
-    // 阻塞队列，存储阻塞任务
+    // 阻塞队列，存放已提交待执行的任务
+    //当队列满时，提交任务的线程被阻塞。当队列空时，取任务的线程被阻塞
     private final BlockingQueue<Runnable> workQueue;
     
     /*
@@ -919,6 +926,10 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      *
      * 返回true代表Worker被成功添加，而且被成功启动
      */
+    /*大概过程
+    * 1.判断是否可以能否在线程池中添加新的线程，若不能，则返回false
+    * 2.若能，则添加新的Worker对象到线程池中，并启动与之绑定的线程
+    * */
     private boolean addWorker(Runnable firstTask, boolean core) {
 retry:
         for(int state = ctl.get(); ; ) {
@@ -939,7 +950,7 @@ retry:
                     return false;
                 }
                 
-                // 如果阻塞队列为空，直接返回（因为虽然可以处理阻塞任务，但已经没有阻塞任务了）
+                // firstTask=null。表明想创建新的线程。但如果阻塞队列为空，没有阻塞的任务需要执行，因此不可以创建新线程
                 if(workQueue.isEmpty()){
                     return false;
                 }
@@ -983,7 +994,8 @@ retry:
                  *   4.3 扩大了【核心阈值】，此时也需要补充【N】型Worker，以便与阻塞队列的容量匹配
                  */
     
-                // 如果线程池中的工作线程(Worker)数量超过了对应情形下的阈值，则返回fasle，表示无法再添加新的任务
+                // 若core=true，表明工作线程数量<corePoolSize。但此时又>=corePoolSize,说明工作线程数量发生了变化，需要判断是否有空闲线程，不能直接创建线程，因此返回false
+                //若core=false，当前工作线程数量>=maximumPoolSize.更不能创建新线程了
                 if(workerCountOf(state) >= count) {
                     return false;
                 }
@@ -1803,7 +1815,7 @@ retry:
         return workerPoolState & COUNT_MASK;
     }
     
-    // 合成线程池状态标记
+    // 合成线程池状态标记，得到ctl值
     private static int ctlOf(int runState, int workerCount) {
         return runState | workerCount;
     }
